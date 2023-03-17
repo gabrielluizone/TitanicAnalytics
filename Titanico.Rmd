@@ -1,0 +1,336 @@
+---
+title: "Grande Barco Inafundavel que Afundou"
+output: html_document
+date: "2023-03-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Objetivo da Análise
+
+O objetivo da análise é investigar e compreender o perfil dos passageiros e **explorar as características que podem ter influenciado as chances de sobrevivência dos passageiros**. A fonte dos dados utilizados pode variar, mas algumas das mais comuns são os registros oficiais dos passageiros do Titanic disponíveis publicamente, como os fornecidos pelo site Kaggle <https://www.kaggle.com/c/titanic/data> e pelo Museu Marítimo Nacional dos EUA <https://www.maritime.org/titanic/passengers.htm>.
+
+```{r start00, include=FALSE}
+
+
+```
+
+![titanic](https://mcdn.wallpapersafari.com/medium/81/5/uz3ijF.jpg)
+
+```{r start01, include=FALSE}
+
+
+```
+
+## Bibliotecas e Dataframe
+
+```{r cars}
+if(!require(tidyverse)) install.packages('tidyverse');library(tidyverse)
+if(!require(ggplot2)) install.packages('ggplot2');library(ggplot2)
+if(!require(dplyr)) install.packages('dplyr');library(dplyr)
+if(!require(ggcorrplot)) install.packages('ggcorrplot');library(ggcorrplot)
+if(!require(scales)) install.packages('scales');library(scales)
+if(!require(stringr)) install.packages('stringr');library(stringr)
+
+df <- read.csv('data/titanic.csv') # Variável principal `Survived
+```
+
+## Correlação e Componentes Principais
+
+**Visualização dos atributos e suas correlaçõe**
+
+```{r haro00}
+# Seleciona apenas as variáveis numéricas e remove linhas com valores faltantes
+df %>%
+  select_if(is.numeric) %>%  # seleciona apenas as variáveis numéricas
+  na.omit() %>%  # remove as linhas com valores faltantes
+  cor() %>%  # calcula a correlação entre as variáveis
+  ggcorrplot(lab = TRUE, lab_size = 3, hc.order = TRUE, type = "lower")  # cria o gráfico
+
+# Seleciona as variáveis numéricas relevantes, cria uma variável binária para o gênero e remove linhas com valores faltantes
+df_pca <- df %>% 
+  mutate(Genere = ifelse(Sex == 'female', 1, 0 )) %>%  # cria uma variável binária para o gênero
+  select(Survived, Pclass, Genere, Age, SibSp, Parch, Fare) %>%  # seleciona as variáveis numéricas relevantes
+  drop_na()  # remove as linhas com valores faltantes
+
+# Normaliza os dados e executa o PCA
+df_pca_norm <- apply(df_pca, 2, scale)  # normaliza os dados excluindo a primeira coluna (Survived)
+pca <- prcomp(df_pca_norm)  # realiza o PCA
+
+# Exibe informações sobre as componentes principais
+summary(pca)
+
+# Cria um dataframe com as duas primeiras componentes principais e adiciona a variável 'Survived'
+df_pca_plot <- as.data.frame(pca$x[, 1:2])  # extrai as duas primeiras componentes principais
+df_pca_plot$Survived <- df_pca$Survived  # adiciona a variável 'Survived'
+
+# Cria o gráfico de dispersão das componentes principais
+ggplot(df_pca_plot, aes(x = PC1, y = PC2, color = factor(Survived))) +  # define as variáveis a serem plotadas
+  geom_point() +  # adiciona os pontos
+  labs(title = "Análise de Componentes Principais", x = "Componente Principal 1", y = "Componente Principal 2", color = "Sobreviveu") +  # adiciona títulos aos eixos e legendas
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),  # personaliza o título do gráfico
+        axis.title.x = element_text(size = 14),  # personaliza o título do eixo x
+        axis.title.y = element_text(size = 14),  # personaliza o título do eixo y
+        axis.text = element_text(size = 12))  # personaliza o tamanho dos rótulos dos eixos
+
+# Cria o biplot das componentes principais
+biplot(pca, scale = 0, cex = 0.6, col = c("white", "#254166"))
+
+```
+
+## Taxa de sobrevivencia de homens e mulheres
+
+```{r pressure, echo=FALSE}
+# agrupar dados e calcular porcentagens
+survival_by_gender <- df %>%
+  group_by(Sex, Survived) %>%
+  summarise(count = n()) %>%
+  mutate(percent = count / sum(count) * 100)
+
+# plotar gráfico
+ggplot(survival_by_gender, aes(x = Sex, y = percent, fill = factor(Survived))) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#d15252", "#52d053"), labels = c("Não Sobreviveu", "Sobreviveu")) +
+  labs(x = "Gênero", y = "Porcentagem", fill = "") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12),
+        panel.grid.major.y = element_line(color = "gray90", size = 0.5),
+        panel.grid.minor = element_blank()) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(size=5))) +
+  geom_text(aes(label = paste0(count, " (", sprintf("%.1f", percent), "%)"), y = percent), 
+            position = position_stack(vjust = 0.5), size = 4, color = "#202124")
+
+
+```
+
+## Análise dos Salvos e Mortos no Titanic
+> Começando pela análise da distribuição da faixa etária
+
+```{r haro01, echo=FALSE, fig.height=6, fig.width=12.5}
+
+ggplot(df, aes(x = Age)) +
+  geom_histogram(bins = 20, fill = "#765898", color = "#202124") +
+  labs(title = "Distribuição de Idade dos Passageiros", x = "Idade", y = "Frequência") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.position = "none") +
+  scale_x_continuous(breaks = seq(0, 100, 10)) +
+  geom_vline(aes(xintercept = mean(Age)), color = "black", linetype = "dashed", size = 1) +
+  annotate("text", x = mean(df$Age), y = max(df$Age) * 0.9, label = "Média da Idade", color = "black", size = 5, fontface = "bold")
+
+# %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
+df %>%
+  na.omit() %>%
+  mutate(age_group = cut(Age, breaks = seq(0, max(Age) + 5, by = 5), right = FALSE, labels = paste0(seq(0, max(Age), by = 5), "-", seq(4, max(Age), by = 5)))) %>%
+  count(age_group, Survived, Sex) %>%
+  mutate(Percentage = round(n/sum(n)*100,2)) %>%
+  ggplot(aes(x = age_group, y = n, fill = factor(Survived))) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(Percentage, "%")), position = position_dodge(width = 1), vjust = -0.5, color = "#202124", size = 3) +
+  scale_fill_manual(name = "Sobreviveu?", values = c("#d3290f", "#52d053"), labels = c("Não", "Sim")) +
+  facet_wrap(~ Sex) +
+  labs(title = "Frequência de Sobreviventes e Mortes por Idade e Sexo", x = "Idade", y = "Frequência") +
+  theme(legend.position = "bottom")
+
+```
+
+### Análise das Classes e sua Influência
+> **Frequência de salvos e mortos por classe, idade e sexo**
+
+```{r haro02, echo=FALSE, fig.height=4, fig.width=9}
+df %>%
+  group_by(Pclass, Survived) %>%
+  summarise(count = n()) %>%
+  mutate(Percentage = round(count/sum(count)*100,2)) %>%
+  mutate(Survived = ifelse(Survived == 1, "Survived", "Died")) %>%
+  ggplot(aes(x = factor(Pclass), y = Percentage, fill = Survived)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(count)), position = position_dodge(width = 1), vjust = -0.5, color = "#202124", size = 3) +
+  geom_text(aes(label = paste0(round(Percentage, 0), "%")), position = position_dodge(width = 1), vjust = 1.5, color = "black", size = 3) +
+  scale_fill_manual(name = "Survived", values = c("#d3290f", "#52d053"), labels = c("Died", "Survived")) +
+  scale_x_discrete(limits=c("1", "2", "3")) +
+  labs(title = "Proporção de sobreviventes e óbitos por classe de passageiros", x = "Classe", y = "Proporção")
+
+```
+
+> **Visualizando a Proporção de Cada Classe ao Total**
+
+```{r haro03, echo=FALSE, fig.height=4, fig.width=9}
+# Calculando as proporções e as porcentagens
+survival_by_class <- df %>%
+  group_by(Pclass, Survived) %>%
+  summarise(count = n())
+
+survival_by_class$prop <- survival_by_class$count / sum(survival_by_class$count)
+survival_by_class$percent <- paste0(round(survival_by_class$prop * 100, 1), "%")
+
+# Gerando o gráfico
+ggplot(survival_by_class, aes(x = factor(Pclass), y = prop, fill = factor(Survived))) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(aes(label = percent), position = position_stack(vjust = 0.5)) + # adiciona as porcentagens nas barras
+  labs(title = "Taxa de sobrevivência por classe", x = "Classe", y = "Proporção") +
+  scale_fill_manual(name = "Sobreviveu?", values = c("#d3290f", "#52d053"), labels = c("Não", "Sim"))
+```
+
+> **Análise sobre os mesmos Níveis** 
+
+```{r haro04, echo=FALSE, fig.height=5, fig.width=9}
+
+df %>%
+  mutate(Survived = ifelse(Survived == 1, "Survived", "Died")) %>%
+  group_by(Pclass, Sex, Survived) %>%
+  summarise(count = n()) %>%
+  mutate(Percentage = round(count/sum(count)*100,2)) %>%
+  ggplot(aes(x = factor(Pclass), y = Percentage, fill = Survived)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = count), position = position_dodge(width = 1), vjust = -0.5, color = "#202124", size = 3) +
+  scale_fill_manual(name = "Survived", values = c("#d3290f", "#52d053"), labels = c("Died", "Survived")) +
+  scale_x_discrete(limits = c("1", "2", "3")) +
+  facet_wrap(~Sex, nrow = 1, scales = "free_x") +
+  labs(title = "Proporção de sobreviventes e óbitos por classe de passageiros",
+       subtitle = "Dados separados por sexo",
+       x = "Classe",
+       y = "Porcentagem (%)",
+       fill = "") +
+  theme(legend.position = "bottom",
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+
+```
+
+> **Separação do Gênero e sua Proporção ao Todo**
+
+```{r haro05, echo=FALSE, fig.height=5, fig.width=9}
+survival_by_class_gender <- df %>%
+  group_by(Pclass, Survived, Sex) %>%
+  summarise(count = n())
+
+survival_by_class_gender$prop <- survival_by_class_gender$count / sum(survival_by_class_gender$count)
+survival_by_class_gender$percent <- paste0(round(survival_by_class_gender$prop * 100, 1), "%")
+
+ggplot(survival_by_class_gender, aes(x = factor(Pclass), y = prop, fill = factor(Survived))) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(aes(label = percent), position = position_stack(vjust = 0.5)) +
+  labs(title = "Taxa de sobrevivência por classe e gênero", x = "Classe", y = "Proporção") +
+  scale_fill_manual(name = "Sobreviveu?", values = c("#d3290f", "#52d053"), labels = c("Não", "Sim")) +
+  facet_wrap(. ~ Sex)
+
+```
+
+## Probabilidade de sobrevivencia
+> **Fotores que influencia na sobrevivencia**
+
+```{r haro06, echo=FALSE, fig.height=5, fig.width=9}
+df <- df %>% mutate(FamilySize = SibSp + Parch)
+
+# agrupando por gênero, número de parentes a bordo e sobrevivência, e somando o número de ocorrências
+survival_by_family_size <- df %>%
+  group_by(Sex, FamilySize, Survived) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+# calculando a porcentagem de sobrevivência para cada categoria
+survival_by_family_size <- survival_by_family_size %>%
+  group_by(Sex, FamilySize) %>%
+  mutate(percent = count / sum(count) * 100)
+
+# criando o gráfico de barras empilhadas
+ggplot(survival_by_family_size, aes(x = FamilySize, y = percent, fill = factor(Survived))) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ Sex) +
+  scale_fill_manual(values = c("#d3290f", "#52d053"), labels = c("Não Sobreviveu", "Sobreviveu")) +
+  labs(title = "Porcentagem de Sobrevivência por Número de Parentes a Bordo e Gênero", x = "Número de Parentes a Bordo", y = "Porcentagem") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.position = "bottom",
+        legend.title = element_blank()) +
+  guides(fill = guide_legend(reverse = TRUE))
+```
+
+
+## Análise das Colunas `SibSp` e `Parch`
+> **As variáveis SibSp e Parch no conjunto de dados Titanic representam informações diferentes.
+
+A variável SibSp representa o número de irmãos/cônjuges a bordo do navio, enquanto a variável Parch representa o número de pais/filhos a bordo do navio. Portanto, são informações distintas e podem ser utilizadas de formas diferentes em análises.**
+
+#### Pode excluir (Se quiser)
+
+```{r haro08, echo=FALSE, fig.height=5, fig.width=9}
+# Seleciona as colunas de interesse e remove as linhas com valores faltantes
+df_sobrevivencia_sibsp_parch <- df %>%
+  select(Survived, SibSp, Parch) %>%
+  drop_na()
+
+# Cria uma tabela de contingência para analisar a relação entre SibSp, Parch e Sobrevivência
+table(df_sobrevivencia_sibsp_parch$SibSp, df_sobrevivencia_sibsp_parch$Parch, df_sobrevivencia_sibsp_parch$Survived)
+
+# Cria um gráfico de barras empilhadas para visualizar a relação entre SibSp, Parch e Sobrevivência
+df_sobrevivencia_sibsp_parch %>%
+  mutate(SibSp = as.factor(SibSp),
+         Parch = as.factor(Parch)) %>%
+  ggplot(aes(x = SibSp, fill = factor(Parch))) +
+  geom_bar() +
+  facet_wrap(~Survived) +
+  labs(title = "Sobrevivência por Número de Irmãos/Cônjuges (SibSp) e Número de Pais/Filhos (Parch)",
+       x = "Número de irmãos/cônjuges (SibSp)",
+       y = "Contagem",
+       fill = "Número de pais/filhos (Parch)") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.title = element_text(size = 12),
+        legend.text = element_text(size = 12)) +
+  scale_fill_discrete(name = "Número de pais/filhos (Parch)") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_rect(color = "black", fill = NA, size = 1),
+        axis.line = element_line(color = "black"),
+        legend.background = element_rect(fill = "gray70", color = "gray90"),
+        legend.key = element_rect(fill = "gray70", color = "gray90"),
+        legend.position = "bottom",
+        legend.box = "horizontal")
+
+```
+
+### Responsaveis pela Análise
+> Fatec Data Science
+
+### Gabriel L. S. Silva
+![](https://media.licdn.com/dms/image/D4D03AQFQsFsLKXzPMA/profile-displayphoto-shrink_200_200/0/1675965892492?e=1684368000&v=beta&t=44Lek1YAlY_o04UJE7FM7176X1wgHa4-HGXnoit2K6s){width=50px}
+[LinkedIn /gabrielluizone](https://www.linkedin.com/in/gabrielluizone/)
+
+### Gabriel A. Nascimento
+![](https://media.licdn.com/dms/image/D5635AQGVVgqdNJMiaQ/profile-framedphoto-shrink_100_100/0/1666362687652?e=1679349600&v=beta&t=iDUlRKk90rsqOaDuKsQa1GAdJXr8YQjQ7khTMOMnOPo){width=50px}
+[LinkedIn /gabriel-andrade-do-nascimento](https://www.linkedin.com/in/gabriel-andrade-do-nascimento-8126a621b?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADd0Dw4BEQ5cZGCtkLcYVZXXR3COf_wlAZM&lipi=urn%3Ali%3Apage%3Ad_flagship3_search_srp_people_load_more%3B455CSK1uS5S0%2BO9rcvCcSw%3D%3D)
+
+### Fernanda
+![](https://cdn-images-1.medium.com/v2/resize:fit:700/1*q_dy5SuRV1491Ldw_TQzDQ.gif){width=50px}
+[LinkedIn /????????](https://www.linkedin.com/in/gabrielluizone/)
+
+![](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
+
+
+![Logo da Turma Data Science](download.png)
+
+
+
+
+
+
+
+[Teste com Imagem](https://i0.wp.com/elgeneracionalpost.com/wp-content/uploads/2020/07/mucho-texto.jpg?fit=1280%2C720&ssl=1)
+

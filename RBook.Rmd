@@ -1,0 +1,415 @@
+---
+title: "O Inafundável que Afundou"
+subtitle: "Uma análise dos passageiros do Titanic: sobrevivência, perfil e correlações" 
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+O naufrágio do Titanic é um dos eventos mais conhecidos da história marítima. Em 15 de abril de 1912, o navio que era considerado inafundável colidiu com um iceberg e afundou, resultando na morte de mais de 1.500 pessoas. Esse trágico acontecimento gerou grande comoção na época e, desde então, tem sido objeto de inúmeras investigações e estudos. 
+
+![](https://br.web.img2.acsta.net/r_654_368/newsv7/17/06/02/14/27/091379.jpg)
+
+### Introdução
+Com base nos dados do Titanic, apresentaremos a seguir uma análise sobre os passageiros do navio que naufragou em 1912. Serão explorados diversos aspectos, como a distribuição das classes sociais, a relação entre gênero e sobrevivência, a idade dos passageiros, entre outros fatores relevantes.
+
+### Objetivo
+O objetivo da análise é investigar e compreender o perfil dos passageiros e **explorar as características que podem ter influenciado as chances de sobrevivência dos passageiros**. A fonte dos dados utilizados pode variar, mas algumas das mais comuns são os registros oficiais dos passageiros do Titanic disponíveis publicamente, como os fornecidos pelo site Kaggle <https://www.kaggle.com/c/titanic/data> e pelo Museu Marítimo Nacional dos EUA <https://www.maritime.org/titanic/passengers.htm>.
+
+### Bibliotecas
+```{r}
+# Coleção de pacotes para manipulação e visualização de dados
+if(!require(tidyverse)) install.packages('tidyverse');library(tidyverse)
+
+# Crição de gráficos e visualizações estatísticas
+if(!require(ggplot2)) install.packages('ggplot2');library(ggplot2)
+
+# Manipulação de dados, como filtragem, seleção e agregação
+if(!require(dplyr)) install.packages('dplyr');library(dplyr)
+
+# Plotar matrizes de correlação usando ggplot2
+if(!require(ggcorrplot)) install.packages('ggcorrplot');library(ggcorrplot)
+if(!require(plotly)) install.packages('plotly');library(plotly)
+
+# Funções para ajustar a escala dos eixos em gráficos ggplot2
+if(!require(scales)) install.packages('scales');library(scales)
+
+# Fornece funções para manipulação de strings
+if(!require(stringr)) install.packages('stringr');library(stringr)
+
+```
+
+### Importação dos Dados
+
+```{r}
+df <- read.csv('data/titanic.csv') # Variável principal `Survived
+head(df, 3)
+```
+
+| Variável | Descrição |
+| --- | --- |
+| PassengerId | Número de identificação do passageiro |
+| Survived | Passageiro sobreviveu ao naufrágio? (0 = Não; 1 = Sim) |
+| Pclass | Classe onde o passageiro estava no navio (1 = 1ª classe; 2 = 2ª classe; 3 = 3ª classe) |
+| Name | Nome do passageiro |
+| Sex | Sexo biológico |
+| Age | Idade |
+| SibSp | Número de irmãos ou cônjuges a bordo |
+| Parch | Número de pais ou filhos a bordo |
+| Ticket | Número do ticket de embarque (passagem) |
+| Fare | Valor da tarifa (preço da passagem) em Libras Esterlinas |
+| Cabin | Identificação da cabine |
+| Embarked | Porto de embarque (C = Cherbourg; Q = Queenstown; S = Southampton) |
+
+## Análise da Populacional
+
+##### Vizualização pelo Sexo
+
+```{r}
+# Contar número de passageiros por sexo
+passengers_by_sex <- df %>%
+  group_by(Sex) %>%
+  summarise(count = n())
+
+# Calcular proporção
+passengers_by_sex$prop <- passengers_by_sex$count / sum(passengers_by_sex$count)
+
+# Criar gráfico de barras empilhadas
+ggplot(passengers_by_sex, aes(x = Sex, y = prop, fill = Sex)) +
+  geom_bar(stat = "identity", position = "stack") +
+  geom_text(aes(label = paste(count, "(", scales::percent(prop), ")")), 
+            position = position_stack(vjust = 0.5), size=4) +
+  labs(title = "Distribuição de passageiros por sexo", x = "Sexo", y = "Proporção") +
+  scale_fill_manual(values = c("#998ec3", "#6da8f6")) +
+  theme(axis.text.x = element_text(angle = 0, vjust = 0.5, hjust=1))
+
+```
+
+##### Vizualização pela Sobrevivencia
+
+```{r}
+df %>%
+  group_by(Survived) %>%
+  summarise(count = n()) %>%
+  mutate(prop = count / sum(count), 
+         percent = paste0(round(prop * 100, 1), "%")) %>%
+  ggplot(aes(x = factor(Survived), y = count, fill = factor(Survived))) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = percent), 
+            position = position_stack(vjust = 0.5)) +
+  labs(title = "Quantidade de sobreviventes e mortos",
+       x = "Sobreviveu?",
+       y = "Quantidade") +
+  scale_fill_manual(name = "Sobreviveu?",
+                    values = c("#d3290f", "#52d053"),
+                    labels = c("Não", "Sim"))
+```
+
+### Correlações e Direções
+
+```{r}
+# Seleciona apenas as variáveis numéricas e remove linhas com valores faltantes
+# Criar o gráfico de correlação
+df %>%
+  select_if(is.numeric) %>%  # seleciona apenas as variáveis numéricas
+  na.omit() %>%  # remove as linhas com valores faltantes
+  cor() %>%  # calcula a correlação entre as variáveis
+  ggcorrplot(lab = TRUE, lab_size = 3, hc.order = TRUE, type = "lower")  # cria o gráfico
+```
+
+### Análise dos Componentes Principais
+
+```{r}
+# Criar uma variável binária para o gênero e remover as linhas com valores faltantes
+df_pca <- df %>% 
+  mutate(Genere = ifelse(Sex == 'female', 1, 0 )) %>%  # cria uma variável binária para o gênero
+  select(Survived, Pclass, Genere, Age, SibSp, Parch, Fare) %>%  # seleciona as variáveis numéricas relevantes
+  drop_na()  # remove as linhas com valores faltantes
+
+# Normaliza os dados e executa o PCA
+df_pca_norm <- apply(df_pca, 2, scale) # normaliza os dados excluindo a primeira coluna (Survived)
+pca <- prcomp(df_pca_norm)  # realiza o PCA
+
+# Exibe informações sobre as componentes principais
+summary(pca)
+```
+
+## Visualização dos 3PCA | 71% dos Dados
+> A visualização gráfica das 3 primeiras componentes principais mostrou que houve uma separação entre os passageiros que sobreviveram e os que não sobreviveram, sugerindo que essas variáveis foram importantes
+
+```{r}
+# Cria o dataframe com as três primeiras componentes principais e adiciona a variável 'Survived'
+df_pca_plot_3d <- as.data.frame(pca$x[, 1:3])  # extrai as três primeiras componentes principais
+df_pca_plot_3d$Survived <- factor(df_pca$Survived, levels = c(0, 1), labels = c("Morreu", "Viveu"))  #
+df_pca_plot_3d$Pclass <- factor(df_pca$Pclass, levels = c(1, 2, 3), labels = c("3", "2", "1"))
+df_pca_plot_3d$Genere <- factor(df_pca$Genere, levels = c(0, 1), labels = c("Homem", "Mulher"))
+df_pca_plot_3d$SibSp <- factor(df_pca$SibSp, levels = c(0, 1, 2, 3, 4, 5, 6), labels = c("0", "1", "2", "3", "4", "5", "6"))
+
+# Cria o gráfico de dispersão das componentes principais em 3D
+plot_ly(df_pca_plot_3d, x = ~PC1, y = ~PC2, z = ~PC3, color = ~factor(Survived), type = "scatter3d", mode = "markers",
+        colors = c("#EE2E21", "#1D7874"), marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "Componente Principal 1"),
+                      yaxis = list(title = "Componente Principal 2"),
+                      zaxis = list(title = "Componente Principal 3")),
+         legend = list(title = "Sobreviveu"), title = "Análise de Componentes Principais em 3D")
+```
+
+### Componentes pelo Genero
+
+```{r}
+plot_ly(df_pca_plot_3d, x = ~PC1, y = ~PC2, z = ~PC3, color = ~factor(Genere), type = "scatter3d", mode = "markers",
+        colors = c("#3784B9", "#B9375E"), marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "Componente Principal 1"),
+                      yaxis = list(title = "Componente Principal 2"),
+                      zaxis = list(title = "Componente Principal 3")),
+         legend = list(title = "Sexo"), title = "Análise de Componentes Principais pelo Gênero")
+```
+### Componentes pela Classe
+
+```{r}
+plot_ly(df_pca_plot_3d, x = ~PC1, y = ~PC2, z = ~PC3, color = ~factor(Pclass), type = "scatter3d", mode = "markers",
+        colors = c("#cf2da4", "#2dcf3e", "#2d48cf"), marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "Componente Principal 1"),
+                      yaxis = list(title = "Componente Principal 2"),
+                      zaxis = list(title = "Componente Principal 3")),
+         legend = list(title = "Sobreviveu"), title = "Análise de Componentes Principais em 3D")
+```
+
+
+### Direção das Variáveis
+> **Utilidade:** Entender como as variáveis se relacionam entre si e com as componentes principais, permitindo a identificação de padrões e tendências
+
+```{r, fig.height=7, fig.width=7}
+biplot(pca, scale = 0, cex = 0.6, col = c("white", "#0046FF"))
+```
+
+### Sobrevivência por Gênero
+> Agrupar os dados por gênero e sobrevivência e calcular as porcentagens de sobrevivência por gênero
+
+- Mesmo com o maior número de homens na embarcação. O número de sobreviventes do sexo feminino foi maior que do sexo masculino.
+
+- O número de mulheres sobreviventes foi cerca de 3x maior que o número de homens sobreviventes.
+
+
+```{r}
+# agrupar dados e calcular porcentagens
+survival_by_gender <- df %>%
+  group_by(Sex, Survived) %>%
+  summarise(count = n()) %>%
+  mutate(percent = count / sum(count) * 100)
+
+# plotar gráfico
+ggplot(survival_by_gender, aes(x = Sex, y = percent, fill = factor(Survived))) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("#d15252", "#52d053"), labels = c("Não Sobreviveu", "Sobreviveu")) +
+  labs(x = "Gênero", y = "Porcentagem", fill = "") +
+  theme(plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.position = "bottom",
+        legend.title = element_blank(),
+        legend.text = element_text(size = 12),
+        panel.grid.major.y = element_line(color = "gray90", size = 0.5),
+        panel.grid.minor = element_blank()) +
+  guides(fill = guide_legend(reverse = TRUE, override.aes = list(size=5))) +
+  geom_text(aes(label = paste0(count, " (", sprintf("%.1f", percent), "%)"), y = percent), 
+            position = position_stack(vjust = 0.5), size = 4, color = "#202124")
+
+```
+
+### Distribuição de Idade dos Passageiros do Titanic
+> Agrupar os passageiros por faixa etária e analisar o número de pessoas por faixa no barco
+
+-  Distribuição de idade em uma escala de 0 a 80 anos. Ajuda a entender melhor como as idades estão distribuídas entre os passageiros do navio
+
+-  A número de passageiros entre 20 e 50 anos é dominante comparado as demais idades. A média de idade está por volta de 30 anos.
+
+```{r}
+ggplot(df, aes(x = Age)) +
+  geom_histogram(bins = 20, binwidth = 2, fill = "#5328d4", color = "#202124") +
+  labs(title = "Distribuição de Idade dos Passageiros", x = "Idade", y = "Frequência") +
+  theme(plot.title = element_text(size = 14, hjust = 0.5),
+        axis.title.x = element_text(size = 14),
+        axis.title.y = element_text(size = 14),
+        axis.text = element_text(size = 12),
+        legend.position = "bottom") +
+  scale_x_continuous(breaks = seq(0, 80, 10)) +
+  geom_vline(aes(xintercept = mean(Age, na.rm = TRUE)), color = "#86d94e", linetype = "dashed", size = 1) +
+  annotate("text", x = mean(df$Age, na.rm = TRUE), y = max(df$Age) * 0.9, label = "Média da Idade", color = "#202124", size = 5, fontface = "bold") +
+  guides(fill = guide_legend(title = "Legenda"))
+
+```
+
+##### Densidade
+>  Agrupar as pessoas por idade e analiasar a densidade da sobrevivência.
+
+-  Número relativo de jovens que sobreviveram foi maior que as demais faixas etárias.
+
+-  Mesmo assim, o número de jovens mortos chega a cerca de 50% do valor total de jovens na embarcação.
+
+-  Número de mortos por volta de 23 anos é muito maior que o número de sobreviventes.
+
+-  chance de sobrevivência cai ao passo que a idade do passageiro aumenta.
+
+```{r}
+# Remover observações com idade faltante
+df_age <- df[!is.na(df$Age),]
+
+# Gráfico de densidade para cada grupo de sobreviventes
+ggplot(df_age, aes(x = Age, fill = factor(Survived))) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Densidade da idade dos passageiros por sobrevivência",
+       x = "Idade",
+       y = "Densidade") + theme(legend.position = "bottom") +
+  scale_fill_manual(name = "Sobreviveu?",
+                    values = c("#d3290f", "#52d053"),
+                    labels = c("Não", "Sim"))
+```
+
+
+### Relacionamento entre Sobrevivência e Idade por Sexo
+> Identificar se há alguma relação entre a idade dos passageiros do Titanic e suas chances de sobrevivência, levando em consideração o sexo dos passageiros -
+
+-  Novamente, observamos o maior número relativo de mortes dentre homens e, principalmente, de 20 a 50 anos. 
+
+-  Há um caso que aumenta a chance de sobreviência acima de 80 anos dentre homens.
+
+```{r, fig.height=6, fig.width=13.5}
+df %>%
+  na.omit() %>%
+  mutate(age_group = cut(Age, breaks = seq(0, max(Age) + 5, by = 5), right = FALSE, labels = paste0(seq(0, max(Age), by = 5), "-", seq(4, max(Age), by = 5)))) %>%
+  count(age_group, Survived, Sex) %>%
+  mutate(Percentage = round(n/sum(n)*100,2)) %>%
+  ggplot(aes(x = age_group, y = n, fill = factor(Survived))) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(Percentage, "%")), position = position_dodge(width = 1), vjust = -0.5, color = "#202124", size = 3) +
+  scale_fill_manual(name = "Sobreviveu?", values = c("#d3290f", "#52d053"), labels = c("Não", "Sim")) +
+  facet_wrap(~ Sex) +
+  labs(title = "Frequência de Sobreviventes e Mortes por Idade e Sexo", x = "Idade", y = "Frequência") +
+  theme(legend.position = "bottom")
+```
+
+### Taxa de Sobrevivencia
+> Relação do número de mortes pelo número total de passageiros por faixa etária.
+
+-  Aumento da proporção de mortes por faixa etária. Entretanto, como já observado, faixa de 19 até 30 anos permanece a com maior densidade de mortes.  
+
+- 50% dos jovens com 0 a 18 anos não sobreviveu
+
+```{r}
+# Criando um data frame com as variáveis de interesse
+df_age_fare <- df %>%
+  select(Age, Fare, Survived) %>%
+  na.omit()
+
+# Criando variáveis para categorizar as idades
+df_age_fare$age_group <- cut(df_age_fare$Age, 
+                             breaks = c(0, 18, 30, 50, Inf), 
+                             labels = c("0-18", "19-30", "31-50", "51+"))
+
+# Criando uma nova variável para armazenar as informações sobre sobrevivência
+df_age_fare$survival <- ifelse(df_age_fare$Survived == 1, "Survived", "Died")
+
+# Calculando a proporção de sobreviventes e mortos em cada faixa etária
+df_age_fare_summary <- df_age_fare %>%
+  group_by(age_group, survival) %>%
+  summarise(count = n()) %>%
+  mutate(prop = count / sum(count))
+
+# Criando um gráfico de barras empilhadas para visualizar a proporção de sobreviventes e mortos em cada faixa etária
+ggplot(df_age_fare_summary, aes(x = age_group, y = prop, fill = survival)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Proporção de sobreviventes e mortos por faixa etária",
+       x = "Faixa etária",
+       y = "Proporção") +
+  scale_fill_manual(name = "Sobrevivência", 
+                    values = c("Died" = "#d3290f", "Survived" = "#52d053"),
+                    labels = c("Mortos", "Sobreviventes"))
+```
+
+
+## Probabilidade de Sobrevivencia pela Classe
+> Relação do número de mortes pelo número total de passageiros por classe de passageiros.
+
+-  Densidade relativa e número bruto de morte altíssimo para a 3° classe. 
+
+- Número de passageiros aumenta ao longo das classes, ao passo que sua chance de sobrevivência diminui.
+
+
+```{r, fig.width=9, fig.height=5}
+df %>%
+  group_by(Pclass, Survived) %>%
+  summarise(count = n(), .groups = "drop") %>%
+  mutate(Percentage = round(count/sum(count)*100,2)) %>%
+  mutate(Survived = ifelse(Survived == 1, "Survived", "Died")) %>%
+  ggplot(aes(x = factor(Pclass), y = Percentage, fill = Survived)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = paste0(count)), position = position_dodge(width = 1), vjust = -0.5, color = "#202124", size = 3) +
+  geom_text(aes(label = paste0(round(Percentage, 0), "%")), position = position_dodge(width = 1), vjust = 1.5, color = "black", size = 3) +
+  scale_fill_manual(name = "Situação", values = c("#d3290f", "#52d053"), labels = c("Vasco", "Viveu")) +
+  scale_x_discrete(limits=c("1", "2", "3")) +
+  labs(title = "Quantidade de sobreviventes e óbitos por classe de passageiros", x = "Classe", y = "Proporção")
+
+```
+
+##### Análise nas Mesmas Proporções
+> Número bruto de sobreviventes e não sobreviventes por classe e sexo.
+
+-  Novamente, percebe-se a maior porcentagem de sobrevivência entre mulheres, principalmente de classes mais altas.
+
+-  Interessante o fato de que o número de mulheres que sobreviveram e não sobreviveram na terceira classe é exatamente o mesmo, segundo a base analisada.
+
+```{r, fig.width=9, fig.height=5}
+df %>%
+  mutate(Survived = ifelse(Survived == 1, "Survived", "Died")) %>%
+  group_by(Pclass, Sex, Survived) %>%
+  summarise(count = n()) %>%
+  mutate(Percentage = round(count/sum(count)*100,2)) %>%
+  ggplot(aes(x = factor(Pclass), y = Percentage, fill = Survived)) +
+  geom_col(position = "dodge") +
+  geom_text(aes(label = count), position = position_dodge(width = 1), vjust = -0.5, color = "#202124", size = 3) +
+  scale_fill_manual(name = "Sobreviveu?", values = c("#d3290f", "#52d053"), labels = c("Não", "Sim")) +
+  scale_x_discrete(limits = c("1", "2", "3")) +
+  facet_wrap(~Sex, nrow = 1, scales = "free_x") +
+  labs(title = "Comparação de sobreviventes e óbitos por classe",
+       subtitle = "Dados separados por sexo",
+       x = "Classe",
+       y = "Porcentagem (%)",
+       fill = "") +
+  theme(legend.position = "bottom",
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())
+```
+
+##### Vizualização em Comparação a População
+> Relação do número de mortes pelo número total de passageiros por sexo.
+
+- Vemos como o número relativo de mortos da terceira classe é muito maior que comparado a outras classes em ambos os sexos.
+
+-  Mesmo assim, o número relativo de sobreviventes homens na terceira classe é maior que da segunda classe. 
+
+```{r, fig.width=9, fig.height=5}
+# Agrupa os dados por classe de passageiros, gênero e sobrevivência
+survival_by_class_gender <- df %>%
+  group_by(Pclass, Survived, Sex) %>%
+  summarise(count = n())
+
+# Calcula a proporção e o percentual de sobreviventes em cada categoria
+survival_by_class_gender$prop <- survival_by_class_gender$count / sum(survival_by_class_gender$count)
+survival_by_class_gender$percent <- paste0(round(survival_by_class_gender$prop * 100, 1), "%")
+
+# Cria um gráfico de barras empilhadas com as proporções de sobrevivência por classe e sobrevivência, 
+# colorido de acordo com a variável de sobrevivência
+ggplot(survival_by_class_gender, aes(x = factor(Pclass), y = prop, fill = factor(Survived))) +
+  geom_bar(stat = "identity", position = "stack") + # indica que é um gráfico de barras empilhadas
+  geom_text(aes(label = percent), position = position_stack(vjust = 0.5)) + 
+  labs(title = "Proporção de sobrevivência ao Total", x = "Classe", y = "Proporção") + 
+  theme(legend.position = "bottom") +
+  scale_fill_manual(name = "Sobreviveu?", values = c("#d3290f", "#52d053"), labels = c("Não", "Sim")) + 
+  facet_wrap(. ~ Sex) # adiciona um facet_wrap para separar os gráficos por gênero
+
+```
+### Titanic Analytcis
+[@gabrielluizone](https://www.linkedin.com/in/gabrielluizone/)
