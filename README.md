@@ -1,2 +1,4 @@
 # TitanicAnalytics
 Análise Exploratória com os Dados do Titanic
+
+> A análise exploratória dos dados do Titanic consistiu em uma investigação inicial do conjunto de dados disponível. Foram utilizadas técnicas de estatística descritiva e visualização de dados para entender a composição e distribuição dos dados. Foram analisadas variáveis como idade, sexo, classe social, local de embarque e sobrevivência, com o objetivo de identificar possíveis correlações e padrões. Os resultados preliminares mostraram uma maior taxa de sobrevivência entre mulheres e crianças, bem como uma correlação entre a classe social e a probabilidade de sobrevivência. Esta análise inicial serviu como base para uma análise mais aprofundada dos dados, permitindo a identificação de insights e padrões relevantes sobre o naufrágio do Titanic.
